@@ -54,8 +54,21 @@ export default function Show() {
                                 your GitHub ID, username, name, avatar, bio,
                                 company, location, website, the email address
                                 GitHub shares, whether you have a Sponsors
-                                listing, your public SSH key fingerprints, and
-                                who you follow and who follows you.
+                                listing, your public SSH key fingerprints, who
+                                you follow and who follows you, and whose
+                                repositories you starred, to suggest them.
+                            </>,
+                            <>
+                                <strong>
+                                    From GitHub, before you sign up:
+                                </strong>{' '}
+                                when a member opens the page of your GitHub
+                                username, your GitHub ID, username, name,
+                                avatar, and bio, to show that page until you
+                                sign in and make it yours, and which members
+                                follow you on GitHub, who then follow you here
+                                once you sign up. Never your location or
+                                website.
                             </>,
                             <>
                                 <strong>
@@ -279,6 +292,11 @@ export default function Show() {
                         GitHub account id, the reason, and when it happened. It
                         stops a banned GitHub account from signing up again, and
                         keeps a timeout from ending early by signing up again.
+                    </p>
+                    <p>
+                        When you delete your account, we keep your GitHub ID
+                        until you sign in again, so that your page doesn't come
+                        back before you sign up.
                     </p>
                 </DocumentSection>
 

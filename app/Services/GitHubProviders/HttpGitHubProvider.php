@@ -71,6 +71,27 @@ final readonly class HttpGitHubProvider implements GitHubProvider
         return ! $response->notFound() && $response->throw()->noContent();
     }
 
+    public function publicOrganizationMemberIds(string $login): ?array
+    {
+        $ids = collect();
+
+        for ($page = 1; $page <= 10; $page++) {
+            $response = $this->request()->get('orgs/'.rawurlencode($login).'/public_members', ['per_page' => self::PerPage, 'page' => $page]);
+
+            if ($response->notFound()) {
+                return null;
+            }
+
+            $ids = $ids->concat($response->throw()->collect()->mapInto(Fluent::class)->map(fn (Fluent $member): string => $member->string('id')->value()));
+
+            if (! str_contains($response->header('Link'), 'rel="next"')) {
+                return array_values($ids->unique()->all());
+            }
+        }
+
+        return null;
+    }
+
     /**
      * The REST API doesn't say, so this asks GraphQL with the user's own token. Everything inside the listing, even
      * whether it's public, needs a read:user or read:org token, and sign-in only asks for user:email.
@@ -113,6 +134,17 @@ final readonly class HttpGitHubProvider implements GitHubProvider
     public function followerIds(string $login, int $maxPages): array
     {
         return array_map(fn (array $account): string => (string) $account['id'], $this->accounts("users/{$login}/followers", $maxPages));
+    }
+
+    public function starredOwnerIds(string $login, int $maxPages): array
+    {
+        /** @var list<array{owner: array{id: int, type: string}}> $repositories */
+        $repositories = $this->pages("users/{$login}/starred", $maxPages);
+
+        return array_values(array_map(
+            fn (array $repository): string => (string) $repository['owner']['id'],
+            array_filter($repositories, fn (array $repository): bool => $repository['owner']['type'] === 'User'),
+        ));
     }
 
     public function sshKeys(string $login): array
@@ -297,20 +329,31 @@ final readonly class HttpGitHubProvider implements GitHubProvider
      */
     private function accounts(string $path, int $maxPages): array
     {
-        $accounts = [];
+        /** @var list<array{id: int, type: string}> */
+        return $this->pages($path, $maxPages);
+    }
+
+    /**
+     * The items of a paginated list, up to the given number of pages.
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    private function pages(string $path, int $maxPages): array
+    {
+        $items = [];
 
         for ($page = 1; $page <= $maxPages; $page++) {
-            /** @var list<array{id: int, type: string}> $pageAccounts */
-            $pageAccounts = $this->request()->get($path, ['per_page' => self::PerPage, 'page' => $page])->throw()->json();
+            /** @var list<array<array-key, mixed>> $pageItems */
+            $pageItems = $this->request()->get($path, ['per_page' => self::PerPage, 'page' => $page])->throw()->json();
 
-            array_push($accounts, ...$pageAccounts);
+            array_push($items, ...$pageItems);
 
-            if (count($pageAccounts) < self::PerPage) {
+            if (count($pageItems) < self::PerPage) {
                 break;
             }
         }
 
-        return $accounts;
+        return $items;
     }
 
     /**

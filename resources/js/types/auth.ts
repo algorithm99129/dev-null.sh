@@ -10,6 +10,7 @@ export type Lane = number | string;
 export type LiveStream = {
     url: string;
     thumbnail_url: string;
+    ends_at?: string | null;
 };
 
 export type User = {
@@ -54,6 +55,10 @@ export type Auth = {
     canPostAsOrganization: boolean;
     isAdmin: boolean;
     automaticTranslation: boolean;
+    /**
+     * The language the reader reads translations in, saved or from the browser.
+     */
+    translationLanguage?: string;
     mustReadCommitRules: boolean;
     termsToAccept: string | null;
     log: Log | null;
@@ -70,6 +75,7 @@ export type Auth = {
 
 export type SuggestedUser = User & {
     followed_by_following_count: number;
+    starred_repositories_count: number;
     followers_count: number;
     follows_you: boolean;
 };

@@ -90,7 +90,7 @@ it('downloads a versioned private JSON file with an explicit profile and empty l
     $data = json_decode($response->streamedContent(), true, flags: JSON_THROW_ON_ERROR);
 
     expect($data)->toBe([
-        'schema_version' => 5,
+        'schema_version' => 6,
         'exported_at' => now()->toIso8601String(),
         'profile' => [
             'github_id' => $user->github_id,
@@ -139,7 +139,8 @@ it('downloads a versioned private JSON file with an explicit profile and empty l
         'dismissed_suggestions' => [],
         'organizations' => [],
         'followed_organizations' => [],
-        'pending_organization_follows' => [],
+        'pending_follows' => [],
+        'starred_github_owners' => [],
         'messages' => [],
         'reports' => [],
         'remote_mutes' => [],
@@ -212,6 +213,7 @@ it('exports the pinned commit id', function (): void {
 });
 
 it('exports all the signed-in users commits including replies, deleted ones, and all moderation statuses', function (): void {
+    $this->freezeTime();
     $user = User::factory()->create();
     $other = User::factory()->create();
     $parent = Commit::factory()->for($other)->rejected()->create(['body' => 'Another developer private parent body']);
@@ -247,6 +249,7 @@ it('exports all the signed-in users commits including replies, deleted ones, and
             'source_language' => 'en',
             'translations' => ['nl' => 'Unicode-ondersteuning geleverd 🚀'],
             'expires_at' => now()->addDays(7)->getTimestamp(),
+            'translated_at' => now()->getTimestampMs(),
         ],
         'status' => 'approved',
         'pasteis_count' => 3,
@@ -515,9 +518,9 @@ it('exports the organizations the user follows, first follow first', function ()
     ]);
 });
 
-it('exports the github organizations the user waits to follow', function (): void {
+it('exports the GitHub accounts the user waits to follow', function (): void {
     $user = User::factory()->create();
-    DB::table('pending_organization_follows')->insert([
+    DB::table('pending_follows')->insert([
         ['user_id' => $user->id, 'github_id' => '958072', 'created_at' => now()],
         ['user_id' => $user->id, 'github_id' => '1', 'created_at' => now()],
         ['user_id' => User::factory()->create()->id, 'github_id' => '2', 'created_at' => now()],
@@ -526,7 +529,24 @@ it('exports the github organizations the user waits to follow', function (): voi
     $response = $this->actingAs($user)->get(route('export'));
     $data = json_decode($response->streamedContent(), true, flags: JSON_THROW_ON_ERROR);
 
-    expect($data['pending_organization_follows'])->toBe(['1', '958072']);
+    expect($data['pending_follows'])->toBe(['1', '958072']);
+});
+
+it('exports whose github repositories the user starred', function (): void {
+    $user = User::factory()->create();
+    DB::table('starred_github_owners')->insert([
+        ['user_id' => $user->id, 'github_id' => '583231', 'repositories_count' => 2, 'created_at' => now()],
+        ['user_id' => $user->id, 'github_id' => '1', 'repositories_count' => 1, 'created_at' => now()],
+        ['user_id' => User::factory()->create()->id, 'github_id' => '2', 'repositories_count' => 1, 'created_at' => now()],
+    ]);
+
+    $response = $this->actingAs($user)->get(route('export'));
+    $data = json_decode($response->streamedContent(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($data['starred_github_owners'])->toBe([
+        ['github_id' => '1', 'repositories_count' => 1],
+        ['github_id' => '583231', 'repositories_count' => 2],
+    ]);
 });
 
 it('exports the devices approved for the app, oldest first', function (): void {

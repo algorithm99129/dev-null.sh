@@ -51,7 +51,8 @@ use Traversable;
  *     dismissed_suggestions: Generator<int, ExportUser>,
  *     organizations: array<int, array{handle: string, role: string, joined_at: string}>,
  *     followed_organizations: array<int, array{handle: string, followed_at: string}>,
- *     pending_organization_follows: list<string>,
+ *     pending_follows: list<string>,
+ *     starred_github_owners: list<array{github_id: string, repositories_count: int}>,
  *     messages: Generator<int, ExportMessage>,
  *     reports: Traversable<int, array<string, mixed>>,
  *     remote_pins: array<int, array{to: string|null, pinned_at: string|null}>,
@@ -74,7 +75,7 @@ final readonly class CreateExport
     public function handle(User $user): array
     {
         return [
-            'schema_version' => 5,
+            'schema_version' => 6,
             'exported_at' => now()->toIso8601String(),
             'profile' => [
                 'github_id' => $user->github_id,
@@ -123,7 +124,8 @@ final readonly class CreateExport
             'dismissed_suggestions' => $this->handles($user->dismissedSuggestions()),
             'organizations' => $this->organizations($user),
             'followed_organizations' => $this->followedOrganizations($user),
-            'pending_organization_follows' => $this->pendingOrganizationFollows($user),
+            'pending_follows' => $this->pendingFollows($user),
+            'starred_github_owners' => $this->starredGitHubOwners($user),
             'messages' => $this->messages($user),
             'reports' => CommitReport::query()->where('reporter_id', $user->id)->oldest('id')->cursor()->map(fn (CommitReport $report): array => [
                 'commit_id' => $report->commit_id,
@@ -397,14 +399,30 @@ final readonly class CreateExport
     }
 
     /**
-     * The GitHub IDs of the organizations the user follows on GitHub, to follow here once they are on /dev/null.
+     * The GitHub IDs of the accounts the user waits to follow until they are on /dev/null: organizations and developers.
      *
      * @return list<string>
      */
-    private function pendingOrganizationFollows(User $user): array
+    private function pendingFollows(User $user): array
     {
         /** @var list<string> */
-        return DB::table('pending_organization_follows')->where('user_id', $user->id)->orderBy('github_id')->pluck('github_id')->all();
+        return DB::table('pending_follows')->where('user_id', $user->id)->orderBy('github_id')->pluck('github_id')->all();
+    }
+
+    /**
+     * The GitHub IDs of the people whose repositories the user starred on GitHub, and how many, for suggestions.
+     *
+     * @return list<array{github_id: string, repositories_count: int}>
+     */
+    private function starredGitHubOwners(User $user): array
+    {
+        /** @var Collection<int, object{github_id: string, repositories_count: int}> $owners */
+        $owners = DB::table('starred_github_owners')->where('user_id', $user->id)->orderBy('github_id')->get(['github_id', 'repositories_count']);
+
+        return array_values($owners->map(fn (object $owner): array => [
+            'github_id' => $owner->github_id,
+            'repositories_count' => $owner->repositories_count,
+        ])->all());
     }
 
     /**

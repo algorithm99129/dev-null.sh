@@ -61,6 +61,7 @@ use LogicException;
  * @property-read CarbonInterface|null $onboarded_at
  * @property-read CarbonInterface|null $github_follows_imported_at
  * @property-read CarbonInterface|null $github_organization_follows_imported_at
+ * @property-read CarbonInterface|null $github_stars_imported_at
  * @property-read string|null $remember_token
  * @property-read CarbonInterface|null $github_synced_at
  * @property-read CarbonInterface|null $last_seen_at
@@ -112,6 +113,7 @@ use LogicException;
     'onboarded_at',
     'github_follows_imported_at',
     'github_organization_follows_imported_at',
+    'github_stars_imported_at',
     'live_platform',
     'live_url',
     'live_ends_at',
@@ -208,6 +210,7 @@ final class User extends Authenticatable
             'onboarded_at' => 'datetime',
             'github_follows_imported_at' => 'datetime',
             'github_organization_follows_imported_at' => 'datetime',
+            'github_stars_imported_at' => 'datetime',
             'remember_token' => 'string',
             'live_platform' => LivePlatform::class,
             'live_url' => 'string',
@@ -451,6 +454,14 @@ final class User extends Authenticatable
     public function isOnboarded(): bool
     {
         return $this->onboarded_at !== null;
+    }
+
+    /**
+     * The user's private channel, where only they hear what changed for them.
+     */
+    public function broadcastChannel(): string
+    {
+        return 'users.'.$this->id;
     }
 
     public function isAdmin(): bool

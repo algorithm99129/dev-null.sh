@@ -101,6 +101,35 @@ it('does not list users GitHub no longer has as public members', function (): vo
     Http::assertSentCount(1);
 });
 
+it('reads every public organization member page without exposing or persisting account details', function (): void {
+    Http::fake(['api.github.com/orgs/example/public_members*' => Http::sequence()
+        ->push([['id' => 101, 'login' => 'first']], 200, ['Link' => '<https://api.github.com/orgs/example/public_members?page=2>; rel="next"'])
+        ->push([['id' => 102, 'login' => 'second'], ['id' => 101, 'login' => 'first']])]);
+
+    expect(new HttpGitHubProvider()->publicOrganizationMemberIds('example'))->toBe(['101', '102']);
+
+    Http::assertSent(fn (Request $request): bool => $request['page'] === 2 && $request['per_page'] === 100);
+    Http::assertSentCount(2);
+});
+
+it('does not return a partial public membership list when the scan limit is reached', function (): void {
+    Http::fake(['api.github.com/orgs/example/public_members*' => Http::response([['id' => 101]], 200, ['Link' => '<https://api.github.com/orgs/example/public_members?page=11>; rel="next"'])]);
+
+    expect(new HttpGitHubProvider()->publicOrganizationMemberIds('example'))->toBeNull();
+
+    Http::assertSentCount(10);
+});
+
+it('distinguishes a missing organization from an empty public member list', function (): void {
+    Http::fake([
+        'api.github.com/orgs/missing/public_members*' => Http::response([], 404),
+        'api.github.com/orgs/empty/public_members*' => Http::response([]),
+    ]);
+
+    expect(new HttpGitHubProvider()->publicOrganizationMemberIds('missing'))->toBeNull()
+        ->and(new HttpGitHubProvider()->publicOrganizationMemberIds('empty'))->toBe([]);
+});
+
 it('fails when GitHub fails to say whether the user is a public member', function (): void {
     Http::fake([
         'api.github.com/user/720328' => Http::response(['id' => 720328, 'login' => 'mnapoli']),
@@ -163,6 +192,32 @@ it('tells the organizations the user follows apart from the people', function ()
     ]);
 
     expect(new HttpGitHubProvider()->followingIds('octocat', 10))->toBe(['users' => ['1', '2'], 'organizations' => ['958072']]);
+});
+
+it('reads who owns the repositories the user starred, once per repository, leaving organizations out', function (): void {
+    Http::fake([
+        'api.github.com/users/octocat/starred?per_page=100&page=1' => Http::response([
+            ['id' => 10, 'full_name' => 'mona/dotfiles', 'owner' => ['id' => 1, 'login' => 'mona', 'type' => 'User']],
+            ['id' => 11, 'full_name' => 'laravel/framework', 'owner' => ['id' => 958072, 'login' => 'laravel', 'type' => 'Organization']],
+            ['id' => 12, 'full_name' => 'hubot/hubot', 'owner' => ['id' => 2, 'login' => 'hubot', 'type' => 'User']],
+            ['id' => 13, 'full_name' => 'mona/hello-world', 'owner' => ['id' => 1, 'login' => 'mona', 'type' => 'User']],
+        ]),
+    ]);
+
+    expect(new HttpGitHubProvider()->starredOwnerIds('octocat', 3))->toBe(['1', '2', '1']);
+});
+
+it('reads the starred repositories a page at a time, up to the given number of pages', function (): void {
+    $page = fn (int $from): array => array_map(fn (int $id): array => ['id' => $id, 'owner' => ['id' => $id, 'type' => 'User']], range($from, $from + 99));
+
+    Http::fake([
+        'api.github.com/users/octocat/starred?per_page=100&page=1' => Http::response($page(1)),
+        'api.github.com/users/octocat/starred?per_page=100&page=2' => Http::response($page(101)),
+    ]);
+
+    expect(new HttpGitHubProvider()->starredOwnerIds('octocat', 2))->toBe(array_map(strval(...), range(1, 200)));
+
+    Http::assertSentCount(2);
 });
 
 it('reads the authentication and signing keys of the account', function (): void {

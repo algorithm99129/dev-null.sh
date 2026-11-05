@@ -51,6 +51,13 @@ interface GitHubProvider
     public function isPublicMember(string $organizationGithubId, string $githubId): bool;
 
     /**
+     * Public organization members only. Null when the organization is unavailable or exceeds the bounded scan.
+     *
+     * @return list<string>|null
+     */
+    public function publicOrganizationMemberIds(string $login): ?array;
+
+    /**
      * Whether the user the token is for has a GitHub Sponsors listing. Null when GitHub can't say.
      */
     public function hasSponsorsListing(string $token): ?bool;
@@ -69,6 +76,14 @@ interface GitHubProvider
      * @return list<string>
      */
     public function followerIds(string $login, int $maxPages): array;
+
+    /**
+     * The IDs of the people owning the repositories the user starred, once per repository, most recently starred
+     * first, up to the given number of pages. The repositories of organizations are left out.
+     *
+     * @return list<string>
+     */
+    public function starredOwnerIds(string $login, int $maxPages): array;
 
     /**
      * The public SSH keys of the account, for authentication and signing, in OpenSSH format.
